@@ -106,6 +106,20 @@ do
 end
 ns.CVARS = CVARS
 
+-- Кандидаты, которых нет в меню: найдены в строках Wow.exe, но допустимые
+-- значения и эффект надо выяснять в игре через /fg probe
+local PROBE = {
+    "shadowTextureSize", "shadowNumCascades", "shadowBlendCascades", "shadowSoft", "shadowRt", "shadowMode",
+    "worldBaseMip", "terrainMipLevel", "componentTextureLevel", "lodBias", "MSAAAlphaTest", "MSAAQuality",
+    "maxLightCount", "maxLightDist", "volumeFogLevel", "volumeFogInterior", "bloomEnable", "bloomUserMult",
+    "skyNoiseStrength", "ffxGlow", "ffxDeath", "ffxNether",
+    "reflectionMode", "reflectionDownscale", "rippleDetail", "waterDetail",
+    "lodObjectMinSize", "lodObjectSizeScale", "lodObjectCullDist", "entityLodOffset", "wmoLodDistScale",
+    "terrainLodDiv", "horizonClip",
+    "cameraFov", "cameraBobbing", "cameraTerrainTilt",
+    "particleMTDensity", "physicsLevel", "worldPreloadNonCritical", "RenderScale", "ffxAntiAliasingMode",
+}
+
 local function Print(msg)
     DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99" .. ADDON .. "|r: " .. msg)
 end
@@ -250,6 +264,45 @@ local function Show()
     end
 end
 
+-- Выводит и сохраняет в SavedVariables всё про CVar'ы-кандидаты и CVar'ы
+-- аддона: после выхода из игры файл ForeverGraphics.lua можно разобрать целиком
+local function Probe()
+    local version, build, _, interface = GetBuildInfo()
+    local result = { client = ("%s (%s), Interface %s"):format(version, build, interface), cvars = {} }
+    local function ProbeOne(cvar, show)
+        local info
+        if C_CVar and C_CVar.GetCVarInfo then
+            local value, default, account, character, locked, secure, readOnly = C_CVar.GetCVarInfo(cvar)
+            if value ~= nil then
+                info = { value = value, default = default, locked = locked or nil, secure = secure or nil, readOnly = readOnly or nil }
+            end
+        elseif GetCVar(cvar) ~= nil then
+            info = { value = GetCVar(cvar), default = GetCVarDefault and GetCVarDefault(cvar) }
+        end
+        result.cvars[cvar] = info or false
+        if not show then return end
+        if not info then
+            Print("|cff808080" .. cvar .. ": нет|r")
+        else
+            local flags = (info.locked and " |cffff6060заблокирован|r" or "") ..
+                (info.readOnly and " |cffff6060только чтение|r" or "") ..
+                (info.secure and " |cffffd100защищён|r" or "")
+            Print(("%s = %s (по умолч. %s)%s"):format(cvar, tostring(info.value), tostring(info.default), flags))
+        end
+    end
+    for _, cvar in ipairs(PROBE) do
+        ProbeOne(cvar, true)
+    end
+    -- CVar'ы аддона только сохраняем, чтобы не засорять чат
+    for _, cvar in ipairs(CVARS) do
+        if result.cvars[cvar] == nil then
+            ProbeOne(cvar, false)
+        end
+    end
+    ForeverGraphicsDB.probe = result
+    Print("результат сохранён, после выхода из игры он будет в WTF\\Account\\<аккаунт>\\SavedVariables\\ForeverGraphics.lua")
+end
+
 local function Info()
     local version, build, _, interface = GetBuildInfo()
     Print(("клиент %s (%s), Interface %s, пресет: %s"):format(
@@ -293,11 +346,13 @@ SlashCmdList.FOREVERGRAPHICS = function(msg)
         Show()
     elseif cmd == "info" then
         Info()
+    elseif cmd == "probe" then
+        Probe()
     elseif cmd == "fog" then
         Fog(arg)
     elseif cmd == "tweaks" then
         Tweaks()
     else
-        Print("/fg — окно настроек, /fg apply <low|high|ultra>, /fg fog <on|off>, /fg tweaks, /fg restart, /fg show, /fg info, /fg reset, /fg defaults")
+        Print("/fg — окно настроек, /fg apply <low|high|ultra>, /fg fog <on|off>, /fg tweaks, /fg restart, /fg show, /fg info, /fg probe, /fg reset, /fg defaults")
     end
 end
