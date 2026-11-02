@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: ForeverGraphics
+## Notes: Extended graphics settings for WoW Forever
+## Version: 0.1.0
+## SavedVariables: ForeverGraphicsDB
+
+Core.lua

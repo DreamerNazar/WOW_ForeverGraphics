@@ -1,0 +1,6 @@
+*.zip
+*.rar
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
