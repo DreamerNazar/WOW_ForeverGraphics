@@ -22,3 +22,7 @@
 - `/fg info` — версия клиента и номер Interface
 - `/fg reset` — вернуть значения, сохранённые до первого применения
 - `/fg defaults` — сбросить всё к значениям движка по умолчанию
+
+## Публикация
+Сборка архива: `powershell -ExecutionPolicy Bypass -File build.ps1`.
+Пошагово про CurseForge: [docs/CURSEFORGE.md](docs/CURSEFORGE.md).
