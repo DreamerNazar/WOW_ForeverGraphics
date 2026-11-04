@@ -182,6 +182,8 @@ local function Apply(name, quiet)
     Changed()
 end
 
+ns.Apply = Apply
+
 local function Fog(arg)
     if arg ~= "on" and arg ~= "off" then
         Print("/fg fog <on|off>, сейчас volumeFog = " .. tostring(GetCVar("volumeFog")))
