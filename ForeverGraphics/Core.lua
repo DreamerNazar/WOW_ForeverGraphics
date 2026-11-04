@@ -106,6 +106,20 @@ do
 end
 ns.CVARS = CVARS
 
+-- Кандидаты, которых нет в меню: найдены в строках Wow.exe, но допустимые
+-- значения и эффект надо выяснять в игре через /fg probe
+local PROBE = {
+    "shadowTextureSize", "shadowNumCascades", "shadowBlendCascades", "shadowSoft", "shadowRt", "shadowMode",
+    "worldBaseMip", "terrainMipLevel", "componentTextureLevel", "lodBias", "MSAAAlphaTest", "MSAAQuality",
+    "maxLightCount", "maxLightDist", "volumeFogLevel", "volumeFogInterior", "bloomEnable", "bloomUserMult",
+    "skyNoiseStrength", "ffxGlow", "ffxDeath", "ffxNether",
+    "reflectionMode", "reflectionDownscale", "rippleDetail", "waterDetail",
+    "lodObjectMinSize", "lodObjectSizeScale", "lodObjectCullDist", "entityLodOffset", "wmoLodDistScale",
+    "terrainLodDiv", "horizonClip",
+    "cameraFov", "cameraBobbing", "cameraTerrainTilt",
+    "particleMTDensity", "physicsLevel", "worldPreloadNonCritical", "RenderScale", "ffxAntiAliasingMode",
+}
+
 local function Print(msg)
     DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99" .. ADDON .. "|r: " .. msg)
 end
@@ -155,6 +169,7 @@ local function Apply(name, quiet)
         SetList(preset, ForeverGraphicsDB.excluded)
     else
         ForeverGraphicsDB.excluded = nil
+        ForeverGraphicsDB.custom = nil
         SetList(preset)
     end
     ForeverGraphicsDB.preset = name
@@ -166,6 +181,8 @@ local function Apply(name, quiet)
     end
     Changed()
 end
+
+ns.Apply = Apply
 
 local function Fog(arg)
     if arg ~= "on" and arg ~= "off" then
@@ -199,8 +216,38 @@ local function Restore()
     ForeverGraphicsDB.preset = nil
     ForeverGraphicsDB.noFog = nil
     ForeverGraphicsDB.excluded = nil
+    ForeverGraphicsDB.custom = nil
     Print("исходные настройки восстановлены")
     Changed()
+end
+
+-- Значение, введённое вручную в окне. Запоминается и применяется при входе
+-- поверх пресета
+function ns.SetValue(cvar, value)
+    if GetCVar(cvar) == nil then return end
+    BackupOnce()
+    SetCVar(cvar, value)
+    local actual = GetCVar(cvar)
+    if tonumber(actual) ~= tonumber(value) then
+        Print(("%s: движок принял %s вместо %s"):format(cvar, tostring(actual), tostring(value)))
+    end
+    ForeverGraphicsDB.custom = ForeverGraphicsDB.custom or {}
+    ForeverGraphicsDB.custom[cvar] = actual
+    if ForeverGraphicsDB.excluded then
+        ForeverGraphicsDB.excluded[cvar] = nil
+    end
+    if cvar == "volumeFog" then
+        ForeverGraphicsDB.noFog = nil
+    end
+    Changed()
+end
+
+local function ApplyCustom()
+    for cvar, value in pairs(ForeverGraphicsDB.custom or {}) do
+        if GetCVar(cvar) ~= nil then
+            SetCVar(cvar, value)
+        end
+    end
 end
 
 -- Сброс одного CVar'а к заводскому значению движка
@@ -210,6 +257,9 @@ function ns.ResetToDefault(cvar)
     SetCVar(cvar, default)
     if cvar == "volumeFog" then
         ForeverGraphicsDB.noFog = nil
+    end
+    if ForeverGraphicsDB.custom then
+        ForeverGraphicsDB.custom[cvar] = nil
     end
     -- Иначе пресет вернёт значение при следующем входе
     ForeverGraphicsDB.excluded = ForeverGraphicsDB.excluded or {}
@@ -227,6 +277,7 @@ function ns.ResetAllToDefault()
     ForeverGraphicsDB.preset = nil
     ForeverGraphicsDB.noFog = nil
     ForeverGraphicsDB.excluded = nil
+    ForeverGraphicsDB.custom = nil
     Print("все настройки сброшены к значениям по умолчанию")
     Changed()
 end
@@ -248,6 +299,45 @@ local function Show()
         local mark = (actual and tonumber(actual) == tonumber(wanted)) and "" or " |cffff6060(хотели " .. wanted .. ")|r"
         Print(cvar .. " = " .. tostring(actual) .. mark)
     end
+end
+
+-- Выводит и сохраняет в SavedVariables всё про CVar'ы-кандидаты и CVar'ы
+-- аддона: после выхода из игры файл ForeverGraphics.lua можно разобрать целиком
+local function Probe()
+    local version, build, _, interface = GetBuildInfo()
+    local result = { client = ("%s (%s), Interface %s"):format(version, build, interface), cvars = {} }
+    local function ProbeOne(cvar, show)
+        local info
+        if C_CVar and C_CVar.GetCVarInfo then
+            local value, default, account, character, locked, secure, readOnly = C_CVar.GetCVarInfo(cvar)
+            if value ~= nil then
+                info = { value = value, default = default, locked = locked or nil, secure = secure or nil, readOnly = readOnly or nil }
+            end
+        elseif GetCVar(cvar) ~= nil then
+            info = { value = GetCVar(cvar), default = GetCVarDefault and GetCVarDefault(cvar) }
+        end
+        result.cvars[cvar] = info or false
+        if not show then return end
+        if not info then
+            Print("|cff808080" .. cvar .. ": нет|r")
+        else
+            local flags = (info.locked and " |cffff6060заблокирован|r" or "") ..
+                (info.readOnly and " |cffff6060только чтение|r" or "") ..
+                (info.secure and " |cffffd100защищён|r" or "")
+            Print(("%s = %s (по умолч. %s)%s"):format(cvar, tostring(info.value), tostring(info.default), flags))
+        end
+    end
+    for _, cvar in ipairs(PROBE) do
+        ProbeOne(cvar, true)
+    end
+    -- CVar'ы аддона только сохраняем, чтобы не засорять чат
+    for _, cvar in ipairs(CVARS) do
+        if result.cvars[cvar] == nil then
+            ProbeOne(cvar, false)
+        end
+    end
+    ForeverGraphicsDB.probe = result
+    Print("результат сохранён, после выхода из игры он будет в WTF\\Account\\<аккаунт>\\SavedVariables\\ForeverGraphics.lua")
 end
 
 local function Info()
@@ -272,6 +362,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         elseif ForeverGraphicsDB.noFog then
             SetCVar("volumeFog", 0)
         end
+        ApplyCustom()
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     end
 end)
@@ -293,11 +384,13 @@ SlashCmdList.FOREVERGRAPHICS = function(msg)
         Show()
     elseif cmd == "info" then
         Info()
+    elseif cmd == "probe" then
+        Probe()
     elseif cmd == "fog" then
         Fog(arg)
     elseif cmd == "tweaks" then
         Tweaks()
     else
-        Print("/fg — окно настроек, /fg apply <low|high|ultra>, /fg fog <on|off>, /fg tweaks, /fg restart, /fg show, /fg info, /fg reset, /fg defaults")
+        Print("/fg — окно настроек, /fg apply <low|high|ultra>, /fg fog <on|off>, /fg tweaks, /fg restart, /fg show, /fg info, /fg probe, /fg reset, /fg defaults")
     end
 end
