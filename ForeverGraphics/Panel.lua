@@ -39,6 +39,13 @@ local LABELS = {
 
 local ROW_HEIGHT = 26
 
+-- "1.000000" -> "1", чтобы числа помещались в поле
+local function Format(value)
+    local n = tonumber(value)
+    if n then return ("%g"):format(n) end
+    return tostring(value)
+end
+
 local function Same(a, b)
     local na, nb = tonumber(a), tonumber(b)
     if na and nb then return math.abs(na - nb) < 1e-6 end
@@ -54,7 +61,7 @@ title:SetText(ADDON)
 
 local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-subtitle:SetText("Текущее значение / по умолчанию. Серым — параметры, которых нет в этом клиенте.")
+subtitle:SetText("Введите значение и нажмите Enter. Справа — значение по умолчанию. Серым — параметры, которых нет в клиенте.")
 
 StaticPopupDialogs.FOREVERGRAPHICS_RESET_ALL = {
     text = "Сбросить все настройки ForeverGraphics к значениям по умолчанию?",
@@ -123,9 +130,35 @@ for i, cvar in ipairs(ns.CVARS) do
         ns.ResetToDefault(cvar)
     end)
 
-    row.value = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    row.value:SetPoint("RIGHT", row.button, "LEFT", -10, 0)
-    row.value:SetJustifyH("RIGHT")
+    row.default = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    row.default:SetPoint("RIGHT", row.button, "LEFT", -8, 0)
+    row.default:SetWidth(60)
+    row.default:SetJustifyH("LEFT")
+
+    row.edit = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+    row.edit:SetSize(70, 20)
+    row.edit:SetPoint("RIGHT", row.default, "LEFT", -6, 0)
+    row.edit:SetAutoFocus(false)
+    row.edit:SetJustifyH("RIGHT")
+    row.edit:SetScript("OnEnterPressed", function(self)
+        local text = strtrim(self:GetText())
+        self:ClearFocus()
+        if text ~= "" then
+            ns.SetValue(cvar, text)
+        end
+    end)
+    row.edit:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+    -- Незавершённый ввод не применяем, возвращаем фактическое значение
+    row.edit:SetScript("OnEditFocusLost", function()
+        ns.RefreshPanel()
+    end)
+
+    -- Длинные имена CVar'ов обрезаем, чтобы не залезали под поле ввода
+    row.name:SetPoint("RIGHT", row.edit, "LEFT", -8, 0)
+    row.name:SetJustifyH("LEFT")
+    row.name:SetWordWrap(false)
 
     row.cvar = cvar
     rows[i] = row
@@ -138,13 +171,26 @@ function ns.RefreshPanel()
         local default = ns.GetCVarDefault(row.cvar)
         if current == nil then
             row.label:SetTextColor(0.5, 0.5, 0.5)
-            row.value:SetText("—")
+            row.edit:SetText("")
+            row.edit:Disable()
+            row.default:SetText("")
             row.button:Disable()
         else
             row.label:SetTextColor(1, 1, 1)
             local changed = not Same(current, default)
+            row.edit:Enable()
+            -- Не перебиваем то, что пользователь сейчас печатает
+            if not row.edit:HasFocus() then
+                row.edit:SetText(Format(current))
+                row.edit:SetCursorPosition(0)
+            end
             -- Изменённые значения подсвечиваем, чтобы было видно, что сбрасывать
-            row.value:SetText((changed and "|cff33ff99%s|r / %s" or "%s / %s"):format(current, tostring(default)))
+            if changed then
+                row.edit:SetTextColor(0.2, 1, 0.6)
+            else
+                row.edit:SetTextColor(1, 1, 1)
+            end
+            row.default:SetText("/ " .. Format(default))
             row.button:SetEnabled(changed)
         end
     end

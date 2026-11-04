@@ -169,6 +169,7 @@ local function Apply(name, quiet)
         SetList(preset, ForeverGraphicsDB.excluded)
     else
         ForeverGraphicsDB.excluded = nil
+        ForeverGraphicsDB.custom = nil
         SetList(preset)
     end
     ForeverGraphicsDB.preset = name
@@ -213,8 +214,38 @@ local function Restore()
     ForeverGraphicsDB.preset = nil
     ForeverGraphicsDB.noFog = nil
     ForeverGraphicsDB.excluded = nil
+    ForeverGraphicsDB.custom = nil
     Print("исходные настройки восстановлены")
     Changed()
+end
+
+-- Значение, введённое вручную в окне. Запоминается и применяется при входе
+-- поверх пресета
+function ns.SetValue(cvar, value)
+    if GetCVar(cvar) == nil then return end
+    BackupOnce()
+    SetCVar(cvar, value)
+    local actual = GetCVar(cvar)
+    if tonumber(actual) ~= tonumber(value) then
+        Print(("%s: движок принял %s вместо %s"):format(cvar, tostring(actual), tostring(value)))
+    end
+    ForeverGraphicsDB.custom = ForeverGraphicsDB.custom or {}
+    ForeverGraphicsDB.custom[cvar] = actual
+    if ForeverGraphicsDB.excluded then
+        ForeverGraphicsDB.excluded[cvar] = nil
+    end
+    if cvar == "volumeFog" then
+        ForeverGraphicsDB.noFog = nil
+    end
+    Changed()
+end
+
+local function ApplyCustom()
+    for cvar, value in pairs(ForeverGraphicsDB.custom or {}) do
+        if GetCVar(cvar) ~= nil then
+            SetCVar(cvar, value)
+        end
+    end
 end
 
 -- Сброс одного CVar'а к заводскому значению движка
@@ -224,6 +255,9 @@ function ns.ResetToDefault(cvar)
     SetCVar(cvar, default)
     if cvar == "volumeFog" then
         ForeverGraphicsDB.noFog = nil
+    end
+    if ForeverGraphicsDB.custom then
+        ForeverGraphicsDB.custom[cvar] = nil
     end
     -- Иначе пресет вернёт значение при следующем входе
     ForeverGraphicsDB.excluded = ForeverGraphicsDB.excluded or {}
@@ -241,6 +275,7 @@ function ns.ResetAllToDefault()
     ForeverGraphicsDB.preset = nil
     ForeverGraphicsDB.noFog = nil
     ForeverGraphicsDB.excluded = nil
+    ForeverGraphicsDB.custom = nil
     Print("все настройки сброшены к значениям по умолчанию")
     Changed()
 end
@@ -325,6 +360,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         elseif ForeverGraphicsDB.noFog then
             SetCVar("volumeFog", 0)
         end
+        ApplyCustom()
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     end
 end)
