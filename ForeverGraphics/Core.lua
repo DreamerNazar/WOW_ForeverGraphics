@@ -1,4 +1,5 @@
 local ADDON, ns = ...
+local L = ns.L
 
 -- Клиент WoW Forever (1.60.x) работает на современном движке, поэтому
 -- используем C_CVar, а для старых сборок оставляем глобальные функции
@@ -153,14 +154,14 @@ local function SetList(list, skip)
         end
     end
     if #missing > 0 then
-        Print("нет в клиенте: " .. table.concat(missing, ", "))
+        Print(L["missing in client: "] .. table.concat(missing, ", "))
     end
 end
 
 local function Apply(name, quiet)
     local preset = PRESETS[name]
     if not preset then
-        Print("неизвестный пресет: " .. tostring(name))
+        Print(L["unknown preset: "] .. tostring(name))
         return
     end
     -- При ручном применении пресет снова распространяется на все CVar'ы,
@@ -177,7 +178,7 @@ local function Apply(name, quiet)
         SetCVar("volumeFog", 0)
     end
     if not quiet then
-        Print("применён пресет " .. name)
+        Print(L["applied preset %s"]:format(name))
     end
     Changed()
 end
@@ -186,19 +187,19 @@ ns.Apply = Apply
 
 local function Fog(arg)
     if arg ~= "on" and arg ~= "off" then
-        Print("/fg fog <on|off>, сейчас volumeFog = " .. tostring(GetCVar("volumeFog")))
+        Print(L["/fg fog <on|off>, current volumeFog = "] .. tostring(GetCVar("volumeFog")))
         return
     end
     BackupOnce()
     ForeverGraphicsDB.noFog = arg == "off" or nil
     SetCVar("volumeFog", arg == "on" and 1 or 0)
-    Print("объёмный туман " .. (arg == "on" and "включён" or "выключен"))
+    Print(arg == "on" and L["volumetric fog enabled"] or L["volumetric fog disabled"])
     Changed()
 end
 
 local function Tweaks()
     SetList(TWEAKS)
-    Print("твики применены: отдаление камеры, без окон ошибок Lua, без геймпада, цифры урона, искры на квестовых предметах")
+    Print(L["tweaks applied: camera zoom out, no Lua error popups, no gamepad, damage numbers, sparkles on quest items"])
     Changed()
 end
 
@@ -206,7 +207,7 @@ end
 local function Restore()
     local backup = ForeverGraphicsDB.backup
     if not backup then
-        Print("нечего восстанавливать")
+        Print(L["nothing to restore"])
         return
     end
     for cvar, value in pairs(backup) do
@@ -217,7 +218,7 @@ local function Restore()
     ForeverGraphicsDB.noFog = nil
     ForeverGraphicsDB.excluded = nil
     ForeverGraphicsDB.custom = nil
-    Print("исходные настройки восстановлены")
+    Print(L["original settings restored"])
     Changed()
 end
 
@@ -229,7 +230,7 @@ function ns.SetValue(cvar, value)
     SetCVar(cvar, value)
     local actual = GetCVar(cvar)
     if tonumber(actual) ~= tonumber(value) then
-        Print(("%s: движок принял %s вместо %s"):format(cvar, tostring(actual), tostring(value)))
+        Print(L["%s: engine accepted %s instead of %s"]:format(cvar, tostring(actual), tostring(value)))
     end
     ForeverGraphicsDB.custom = ForeverGraphicsDB.custom or {}
     ForeverGraphicsDB.custom[cvar] = actual
@@ -278,7 +279,7 @@ function ns.ResetAllToDefault()
     ForeverGraphicsDB.noFog = nil
     ForeverGraphicsDB.excluded = nil
     ForeverGraphicsDB.custom = nil
-    Print("все настройки сброшены к значениям по умолчанию")
+    Print(L["all settings reset to defaults"])
     Changed()
 end
 
@@ -286,7 +287,7 @@ function ns.RestartGraphics()
     if RestartGx then
         RestartGx()
     else
-        Print("RestartGx недоступен, перезапустите игру")
+        Print(L["RestartGx is unavailable, restart the game"])
     end
 end
 
@@ -296,7 +297,7 @@ local function Show()
     for _, entry in ipairs(preset) do
         local cvar, wanted = entry[1], entry[2]
         local actual = GetCVar(cvar)
-        local mark = (actual and tonumber(actual) == tonumber(wanted)) and "" or " |cffff6060(хотели " .. wanted .. ")|r"
+        local mark = (actual and tonumber(actual) == tonumber(wanted)) and "" or " |cffff6060(" .. L["wanted %s"]:format(wanted) .. ")|r"
         Print(cvar .. " = " .. tostring(actual) .. mark)
     end
 end
@@ -319,12 +320,12 @@ local function Probe()
         result.cvars[cvar] = info or false
         if not show then return end
         if not info then
-            Print("|cff808080" .. cvar .. ": нет|r")
+            Print("|cff808080" .. cvar .. ": " .. L["missing"] .. "|r")
         else
-            local flags = (info.locked and " |cffff6060заблокирован|r" or "") ..
-                (info.readOnly and " |cffff6060только чтение|r" or "") ..
-                (info.secure and " |cffffd100защищён|r" or "")
-            Print(("%s = %s (по умолч. %s)%s"):format(cvar, tostring(info.value), tostring(info.default), flags))
+            local flags = (info.locked and " |cffff6060" .. L["locked"] .. "|r" or "") ..
+                (info.readOnly and " |cffff6060" .. L["read-only"] .. "|r" or "") ..
+                (info.secure and " |cffffd100" .. L["secure"] .. "|r" or "")
+            Print(L["%s = %s (default %s)%s"]:format(cvar, tostring(info.value), tostring(info.default), flags))
         end
     end
     for _, cvar in ipairs(PROBE) do
@@ -337,13 +338,13 @@ local function Probe()
         end
     end
     ForeverGraphicsDB.probe = result
-    Print("результат сохранён, после выхода из игры он будет в WTF\\Account\\<аккаунт>\\SavedVariables\\ForeverGraphics.lua")
+    Print(L["result saved, after exiting the game it will be in WTF\\Account\\<account>\\SavedVariables\\ForeverGraphics.lua"])
 end
 
 local function Info()
     local version, build, _, interface = GetBuildInfo()
-    Print(("клиент %s (%s), Interface %s, пресет: %s"):format(
-        version, build, interface, ForeverGraphicsDB.preset or "нет"))
+    Print(L["client %s (%s), Interface %s, preset: %s"]:format(
+        version, build, interface, ForeverGraphicsDB.preset or L["none"]))
 end
 
 local frame = CreateFrame("Frame")
@@ -391,6 +392,6 @@ SlashCmdList.FOREVERGRAPHICS = function(msg)
     elseif cmd == "tweaks" then
         Tweaks()
     else
-        Print("/fg — окно настроек, /fg apply <low|high|ultra>, /fg fog <on|off>, /fg tweaks, /fg restart, /fg show, /fg info, /fg probe, /fg reset, /fg defaults")
+        Print(L["/fg — settings window, /fg apply <low|high|ultra>, /fg fog <on|off>, /fg tweaks, /fg restart, /fg show, /fg info, /fg probe, /fg reset, /fg defaults"])
     end
 end
