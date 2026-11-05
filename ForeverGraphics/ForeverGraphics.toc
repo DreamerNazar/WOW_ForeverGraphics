@@ -3,6 +3,7 @@
 ## Notes: Extended graphics settings for WoW Forever
 ## Notes-ruRU: Расширенные настройки графики для WoW Forever
 ## Author: DreamerNazar
+## X-Curse-Project-ID: 1784349
 ## Version: 0.3.0
 ## SavedVariables: ForeverGraphicsDB
 
